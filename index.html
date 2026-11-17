@@ -14,22 +14,24 @@
   ol { margin: 8px 0 0 1.2em; padding: 0; }
   li { margin-bottom: 4px; }
   .scroll { overflow-x: auto; margin-top: 18px; border: 1px solid var(--line); border-radius: 6px; }
-  table { border-collapse: collapse; width: 100%; min-width: 980px; table-layout: fixed; }
+  table { border-collapse: collapse; width: 100%; min-width: 960px; table-layout: fixed; }
   th { background: var(--maroon); color: #fff; text-align: left; padding: 10px; font-size: 0.95rem; vertical-align: bottom; }
+  th.rowhead, td.rowhead { background: var(--gray); color: var(--ink); font-weight: bold; vertical-align: top; }
   td { border-top: 1px solid var(--line); padding: 10px; vertical-align: top; }
-  td.opt { background: var(--gray); font-weight: bold; }
-  th:nth-child(1) { width: 17%; } th:nth-child(2) { width: 21%; }
+  thead th:first-child { width: 17%; }
   select, input[type=text], textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid #9a9a9a; border-radius: 4px; background: #fff; color: var(--ink); }
+  th select { font-weight: bold; }
   textarea { resize: vertical; min-height: 78px; margin-top: 6px; }
-  input[type=text] + input[type=text] { margin-top: 6px; }
+  input[type=text] + input[type=text], select + input[type=text], input[type=text] + select { margin-top: 6px; }
   select:focus, input:focus, textarea:focus, button:focus-visible { outline: 3px solid #e9b44c; outline-offset: 1px; }
-  .rating { width: 100%; }
-  .small { font-size: 0.85rem; color: #4a4a4a; font-weight: normal; }
+  .small { font-size: 0.85rem; color: #4a4a4a; font-weight: normal; display: block; }
   .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
   button { font: inherit; font-weight: bold; border-radius: 6px; padding: 12px 24px; cursor: pointer; }
   .primary { background: var(--maroon); color: #fff; border: 2px solid var(--maroon); }
   .primary:hover { background: #740b06; }
   .secondary { background: #fff; color: var(--maroon); border: 2px solid var(--maroon); }
+  .secondary[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .linkbtn { background: none; border: none; color: var(--maroon); text-decoration: underline; padding: 4px 0; margin-top: 6px; font-weight: normal; font-size: 0.9rem; }
   #status { margin-top: 12px; min-height: 1.5em; font-weight: bold; }
   .warn { color: #8a4b00; }
 </style>
@@ -37,34 +39,28 @@
 <body>
 <div class="wrap">
   <h1>Tool Comparison Table</h1>
-  <p>Fill in this table, download it as a Word document, and copy it into your report.</p>
+  <p>Using this table is optional. It is here to make your report easier. Fill it in, download it as a Word document, and copy it into your report.</p>
 
   <div class="note"><strong>How to use it:</strong>
     <ol>
-      <li>In the first two rows, choose the two new tools you tried.</li>
+      <li>In the first two columns, choose the two new tools you tried.</li>
       <li>For every option, type the price of an individual license and the web address where you found it.</li>
       <li>Rate each option from 1 to 5 on each criterion (1 is poor, 5 is excellent), and add a few words of evidence.</li>
+      <li>If you want, click <strong>Add your own criterion</strong> to add a row, such as accessibility or support.</li>
       <li>Click <strong>Download as Word</strong>.</li>
     </ol>
   </div>
-  <div class="note"><strong>Before you stop for the day:</strong> your work saves in your browser on this device, so use the same browser and device when you come back. Download your table when you are finished. The table is set up for a landscape page. If your report is in portrait, select the table in Word and choose AutoFit, then AutoFit to Window.</div>
+  <div class="note"><strong>Before you stop for the day:</strong> your work saves in your browser on this device, so use the same browser and device when you come back. Download your table when you are finished. The Word table is sized for a portrait page, so it pastes straight into your report.</div>
 
   <div class="scroll">
     <table id="grid">
-      <thead>
-        <tr>
-          <th scope="col">Option</th>
-          <th scope="col">Price of an individual license<br><span class="small" style="color:#fff">and where you found it</span></th>
-          <th scope="col">Ease of use</th>
-          <th scope="col">Interactive and AI features</th>
-          <th scope="col">Quality of the output</th>
-        </tr>
-      </thead>
+      <thead id="head"></thead>
       <tbody id="body"></tbody>
     </table>
   </div>
 
   <div class="actions">
+    <button type="button" class="secondary" id="add">Add your own criterion</button>
     <button type="button" class="primary" id="download">Download as Word</button>
     <button type="button" class="secondary" id="clear">Clear the table</button>
   </div>
@@ -74,31 +70,33 @@
 <script>
 var FIXED = ["Articulate (Rise 360)", "Lovable with Canvas Lite", "Lovable on its own"];
 var CHOICES = ["IsEazy", "Genially", "Easygenerator", "iSpring Suite (Windows)", "iSpring Cloud AI (browser)", "Lectora"];
-var CRIT = [["ease", "Ease of use"], ["features", "Interactive and AI features"], ["output", "Quality of the output"]];
-var KEY = "toolComparisonTable.v1";
+var BASE_CRIT = ["Ease of use", "Interactive and AI features", "Quality of the output"];
+var MAXC = 4;
+var KEY = "toolComparisonTable.v2";
 
+function blankR() { return BASE_CRIT.map(function () { return { s: "", t: "" }; }); }
 function blank() {
-  var rows = [];
-  for (var i = 0; i < 5; i++) {
-    rows.push({ name: i < 2 ? "" : FIXED[i - 2], price: "", url: "",
-      ease: { s: "", t: "" }, features: { s: "", t: "" }, output: { s: "", t: "" } });
-  }
-  return { rows: rows };
+  var o = [];
+  for (var i = 0; i < 5; i++) o.push({ name: i < 2 ? "" : FIXED[i - 2], price: "", url: "", ps: "", r: blankR() });
+  return { opts: o, crit: BASE_CRIT.map(function (n) { return { name: n, custom: false }; }) };
 }
 function load() {
   try {
     var raw = localStorage.getItem(KEY);
     if (!raw) return blank();
     var d = JSON.parse(raw);
-    if (d && d.rows && d.rows.length === 5) {
-      for (var i = 2; i < 5; i++) d.rows[i].name = FIXED[i - 2];
+    if (d && d.opts && d.opts.length === 5 && d.crit && d.crit.length >= 3) {
+      for (var i = 2; i < 5; i++) d.opts[i].name = FIXED[i - 2];
+      d.opts.forEach(function (o) {
+        if (!o.r) o.r = [];
+        while (o.r.length < d.crit.length) o.r.push({ s: "", t: "" });
+      });
       return d;
     }
   } catch (e) {}
   return blank();
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
-
 var state = load();
 
 // BEGIN DOCX
@@ -152,7 +150,7 @@ function runs(text, o) {
   lines.forEach(function (ln, i) {
     x += '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>' +
       (o.b ? "<w:b/>" : "") + (o.color ? '<w:color w:val="' + o.color + '"/>' : "") +
-      '<w:sz w:val="' + (o.sz || 20) + '"/></w:rPr>' + (i > 0 ? "<w:br/>" : "") +
+      '<w:sz w:val="' + (o.sz || 18) + '"/></w:rPr>' + (i > 0 ? "<w:br/>" : "") +
       '<w:t xml:space="preserve">' + esc(ln) + "</w:t></w:r>";
   });
   return x;
@@ -165,33 +163,37 @@ function cell(w, inner, fill) {
   return '<w:tc><w:tcPr><w:tcW w:w="' + w + '" w:type="dxa"/>' +
     (fill ? '<w:shd w:val="clear" w:color="auto" w:fill="' + fill + '"/>' : "") + "</w:tcPr>" + inner + "</w:tc>";
 }
+function score(s) { return s ? s + " / 5" : "Not rated"; }
 function buildDocx(st) {
-  var widths = [2200, 2800, 3133, 3133, 3134];
-  var heads = ["Option", "Price of an individual license (source)", "Ease of use", "Interactive and AI features", "Quality of the output"];
-  var tbl = '<w:tbl><w:tblPr><w:tblW w:w="14400" w:type="dxa"/><w:tblBorders>' +
+  var widths = [1700, 1532, 1532, 1532, 1532, 1532];
+  var tbl = '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/><w:tblBorders>' +
     ["top", "left", "bottom", "right", "insideH", "insideV"].map(function (s) {
       return '<w:' + s + ' w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>';
-    }).join("") + '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
+    }).join("") + '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>' +
     widths.map(function (w) { return '<w:gridCol w:w="' + w + '"/>'; }).join("") + "</w:tblGrid>";
-  tbl += '<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>' + heads.map(function (h, i) {
-    return cell(widths[i], para(h, { b: true, color: "FFFFFF", after: 0 }), "950F08");
-  }).join("") + "</w:tr>";
-  st.rows.forEach(function (r) {
-    var cells = cell(widths[0], para(r.name || "(not chosen)", { b: true, after: 0 }), "F3F3F3");
-    var price = para(r.price || "Not entered", { b: true });
-    if (r.url) price += para(r.url, { sz: 18, color: "555555", after: 0 });
-    cells += cell(widths[1], price);
-    CRIT.forEach(function (c, i) {
-      var v = r[c[0]];
-      var inner = para(v.s ? v.s + " / 5" : "Not rated", { b: true });
-      inner += para(v.t || "", { after: 0 });
-      cells += cell(widths[i + 2], inner);
+  var head = cell(widths[0], para("Criterion", { b: true, color: "FFFFFF", after: 0 }), "950F08");
+  st.opts.forEach(function (o, i) {
+    head += cell(widths[i + 1], para(o.name || "(not chosen)", { b: true, color: "FFFFFF", after: 0 }), "950F08");
+  });
+  tbl += '<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>' + head + "</w:tr>";
+  var prow = cell(widths[0], para("Price of an individual license (and source)", { b: true, after: 0 }), "F3F3F3");
+  st.opts.forEach(function (o, i) {
+    var inner = para(score(o.ps), { b: true }) + para(o.price || "Price not entered", { after: o.url ? 40 : 0 });
+    if (o.url) inner += para(o.url, { sz: 15, color: "555555", after: 0 });
+    prow += cell(widths[i + 1], inner);
+  });
+  tbl += '<w:tr><w:trPr><w:cantSplit/></w:trPr>' + prow + "</w:tr>";
+  st.crit.forEach(function (c, j) {
+    var row = cell(widths[0], para(c.name || "(Your criterion)", { b: true, after: 0 }), "F3F3F3");
+    st.opts.forEach(function (o, i) {
+      var v = o.r[j] || { s: "", t: "" };
+      row += cell(widths[i + 1], para(score(v.s), { b: true }) + para(v.t || "", { after: 0 }));
     });
-    tbl += '<w:tr><w:trPr><w:cantSplit/></w:trPr>' + cells + "</w:tr>";
+    tbl += '<w:tr><w:trPr><w:cantSplit/></w:trPr>' + row + "</w:tr>";
   });
   tbl += "</w:tbl>";
   var body = para("Table 1. Comparison of the five e-learning options", { b: true, sz: 22, after: 120 }) + tbl + "<w:p/>" +
-    '<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
   var doc = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body + "</w:body></w:document>";
   var types = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
   var rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
@@ -212,69 +214,119 @@ function el(tag, attrs, kids) {
   (kids || []).forEach(function (c) { e.appendChild(c); });
   return e;
 }
-function ratingCell(row, key, label) {
-  var td = el("td");
-  var sel = el("select", { "class": "rating", "data-base": "Rating for " + label });
-  var opts = [["", "Rating (1 to 5)"], ["1", "1 - Poor"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5 - Excellent"]];
-  opts.forEach(function (o) { sel.appendChild(el("option", { value: o[0], text: o[1] })); });
-  sel.value = row[key].s;
-  sel.addEventListener("change", function () { row[key].s = sel.value; save(); });
-  var ta = el("textarea", { "data-base": "Evidence for " + label, placeholder: "A few words of evidence from your own visit" });
-  ta.value = row[key].t;
-  ta.addEventListener("input", function () { row[key].t = ta.value; save(); });
-  td.appendChild(sel); td.appendChild(ta);
-  return td;
-}
-function relabel(tr, row, i) {
-  var who = row.name || ("option " + (i + 1));
-  Array.prototype.forEach.call(tr.querySelectorAll("[data-base]"), function (c) {
-    c.setAttribute("aria-label", c.getAttribute("data-base") + " " + who);
+function optName(i) { return state.opts[i].name || ("option " + (i + 1)); }
+function critName(j) { return state.crit[j].name || ("your criterion " + (j - 2)); }
+function relabelAll() {
+  Array.prototype.forEach.call(document.querySelectorAll("[data-kind]"), function (c) {
+    var i = +c.getAttribute("data-col"), kind = c.getAttribute("data-kind"), j = c.getAttribute("data-crit");
+    var label = kind + " " + (j === null ? "" : critName(+j) + ", ") + optName(i);
+    c.setAttribute("aria-label", label);
   });
 }
-function render() {
-  var body = document.getElementById("body");
-  body.innerHTML = "";
-  state.rows.forEach(function (row, i) {
-    var tr = el("tr");
-    var first = el("td", { "class": "opt" });
+function ratingSelect() {
+  var sel = el("select");
+  [["", "Rating (1 to 5)"], ["1", "1 - Poor"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5 - Excellent"]].forEach(function (o) {
+    sel.appendChild(el("option", { value: o[0], text: o[1] }));
+  });
+  return sel;
+}
+function render(focusLast) {
+  var head = document.getElementById("head"), body = document.getElementById("body");
+  head.innerHTML = ""; body.innerHTML = "";
+  var htr = el("tr");
+  htr.appendChild(el("th", { scope: "col", text: "Criterion" }));
+  state.opts.forEach(function (o, i) {
+    var th = el("th", { scope: "col" });
     if (i < 2) {
       var s = el("select", { "aria-label": "New tool " + (i + 1) });
       s.appendChild(el("option", { value: "", text: "Choose a new tool..." }));
       CHOICES.forEach(function (c) { s.appendChild(el("option", { value: c, text: c })); });
-      s.value = row.name;
-      s.addEventListener("change", function () { row.name = s.value; save(); relabel(tr, row, i); });
-      first.appendChild(s);
-    } else {
-      first.textContent = row.name;
-    }
-    tr.appendChild(first);
-    var priceTd = el("td");
-    var p = el("input", { type: "text", "data-base": "Price for", placeholder: "e.g., $19 per month" });
-    p.value = row.price;
-    p.addEventListener("input", function () { row.price = p.value; save(); });
-    var u = el("input", { type: "text", "data-base": "Web address for price, ", placeholder: "Web address where you found it" });
-    u.value = row.url;
-    u.addEventListener("input", function () { row.url = u.value; save(); });
-    priceTd.appendChild(p); priceTd.appendChild(u);
-    tr.appendChild(priceTd);
-    CRIT.forEach(function (c) { tr.appendChild(ratingCell(row, c[0], c[1])); });
-    body.appendChild(tr);
-    relabel(tr, row, i);
+      s.value = o.name;
+      s.addEventListener("change", function () { o.name = s.value; save(); relabelAll(); });
+      th.appendChild(s);
+    } else { th.textContent = o.name; }
+    htr.appendChild(th);
   });
+  head.appendChild(htr);
+
+  var ptr = el("tr");
+  var ph = el("td", { "class": "rowhead" });
+  ph.appendChild(document.createTextNode("Price of an individual license"));
+  ph.appendChild(el("span", { "class": "small", text: "with the web address where you found it, and your 1 to 5 rating of the price" }));
+  ptr.appendChild(ph);
+  state.opts.forEach(function (o, i) {
+    var td = el("td");
+    var p = el("input", { type: "text", "data-kind": "Price for", "data-col": i, placeholder: "e.g., $19 per month" });
+    p.value = o.price; p.addEventListener("input", function () { o.price = p.value; save(); });
+    var u = el("input", { type: "text", "data-kind": "Web address for price of", "data-col": i, placeholder: "Web address where you found it" });
+    u.value = o.url; u.addEventListener("input", function () { o.url = u.value; save(); });
+    var s = ratingSelect(); s.setAttribute("data-kind", "Price rating for"); s.setAttribute("data-col", i);
+    s.value = o.ps; s.addEventListener("change", function () { o.ps = s.value; save(); });
+    td.appendChild(p); td.appendChild(u); td.appendChild(s);
+    ptr.appendChild(td);
+  });
+  body.appendChild(ptr);
+
+  state.crit.forEach(function (c, j) {
+    var tr = el("tr");
+    var rh = el("td", { "class": "rowhead" });
+    if (c.custom) {
+      var n = el("input", { type: "text", "aria-label": "Name of your criterion " + (j - 2), placeholder: "Name your criterion" });
+      n.value = c.name;
+      n.addEventListener("input", function () { c.name = n.value; save(); relabelAll(); });
+      var rm = el("button", { type: "button", "class": "linkbtn", text: "Remove this criterion" });
+      rm.addEventListener("click", function () {
+        state.crit.splice(j, 1);
+        state.opts.forEach(function (o) { o.r.splice(j, 1); });
+        save(); render(); updateAdd(); say("Criterion removed.");
+      });
+      rh.appendChild(n); rh.appendChild(rm);
+    } else { rh.textContent = c.name; }
+    tr.appendChild(rh);
+    state.opts.forEach(function (o, i) {
+      var td = el("td");
+      var s = ratingSelect(); s.setAttribute("data-kind", "Rating for"); s.setAttribute("data-col", i); s.setAttribute("data-crit", j);
+      s.value = o.r[j].s; s.addEventListener("change", function () { o.r[j].s = s.value; save(); });
+      var t = el("textarea", { "data-kind": "Evidence for", "data-col": i, "data-crit": j, placeholder: "A few words of evidence from your own visit" });
+      t.value = o.r[j].t; t.addEventListener("input", function () { o.r[j].t = t.value; save(); });
+      td.appendChild(s); td.appendChild(t);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  relabelAll();
+  if (focusLast) {
+    var ins = body.querySelectorAll("tr:last-child td.rowhead input");
+    if (ins.length) ins[0].focus();
+  }
 }
 
 var statusEl = document.getElementById("status");
 function say(msg, warn) { statusEl.textContent = msg; statusEl.className = warn ? "warn" : ""; }
+var addBtn = document.getElementById("add");
+function updateAdd() {
+  var n = state.crit.length - 3;
+  addBtn.disabled = n >= MAXC;
+  addBtn.textContent = n >= MAXC ? "You can add up to " + MAXC + " criteria" : "Add your own criterion";
+}
+addBtn.addEventListener("click", function () {
+  if (state.crit.length - 3 >= MAXC) return;
+  state.crit.push({ name: "", custom: true });
+  state.opts.forEach(function (o) { o.r.push({ s: "", t: "" }); });
+  save(); render(true); updateAdd(); say("");
+});
 
 document.getElementById("download").addEventListener("click", function () {
   var empty = 0;
-  state.rows.forEach(function (r) {
-    if (!r.name) empty++;
-    if (!r.price) empty++;
-    if (!r.url) empty++;
-    CRIT.forEach(function (c) { if (!r[c[0]].s) empty++; if (!r[c[0]].t.trim()) empty++; });
+  state.opts.forEach(function (o) {
+    if (!o.name) empty++;
+    if (!o.price) empty++;
+    if (!o.url) empty++;
+    if (!o.ps) empty++;
+    o.r.forEach(function (v) { if (!v.s) empty++; if (!v.t.trim()) empty++; });
   });
-  var n0 = state.rows[0].name, n1 = state.rows[1].name;
+  state.crit.forEach(function (c) { if (!c.name.trim()) empty++; });
+  var n0 = state.opts[0].name, n1 = state.opts[1].name;
   var bytes = buildDocx(state);
   var blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
   var a = document.createElement("a");
@@ -297,10 +349,10 @@ clearBtn.addEventListener("click", function () {
     return;
   }
   clearTimeout(armTimer); armed = false; clearBtn.textContent = "Clear the table";
-  state = blank(); save(); render(); say("The table is cleared.");
+  state = blank(); save(); render(); updateAdd(); say("The table is cleared.");
 });
 
-render();
+render(); updateAdd();
 </script>
 </body>
 </html>
